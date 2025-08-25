@@ -1,0 +1,197 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum VoteType {
+  UP
+  DOWN
+}
+
+enum UserRole {
+  CONSUMER
+  FARMER
+}
+
+enum EquipmentCondition {
+  NEW
+  USED
+  REFURBISHED
+}
+
+enum InquiryStatus {
+  NEW
+  CONTACTED
+  IN_DISCUSSION
+  CLOSED
+  PURCHASED
+}
+
+enum CertificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum CertificationStandard {
+  ISO_9001
+  AGMARK
+  FSSAI
+  GMP
+  HACCP
+  ORGANIC_CERTIFICATION
+  EXPORT_CERTIFICATE
+  QUALITY_ASSURANCE
+  SAFETY_CERTIFICATE
+  ENVIRONMENTAL_CERTIFICATION
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id                String         @id @default(cuid())
+  name              String?
+  email             String?        @unique
+  emailVerified     DateTime?
+
+  username String? @unique
+  role UserRole @default(CONSUMER)
+  whatsappNumber String?
+
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  conversations Conversation[]
+  marketplaceItems MarketplaceItem[]
+  equipment Equipment[]
+  inquiriesSent EquipmentInquiry[] @relation("BuyerInquiries")
+  inquiriesReceived EquipmentInquiry[] @relation("SellerInquiries")
+}
+
+model Conversation {
+  id          String       @id @default(uuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages    Message[]
+  createdAt   DateTime     @default(now())
+}
+
+model Message {
+  id             String           @id @default(uuid())
+  conversationId String
+  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         String
+  content        String
+  createdAt      DateTime      @default(now())
+}
+
+model MarketplaceItem {
+  id                   String    @id @default(cuid())
+  itemName             String
+  description         String?
+  estimatedWeightKg    Float     // Estimated Product Weight in kg
+  priceRangePerKg      String    // Estimated Price Range per kg
+  contactLink          String    // Phone/WhatsApp Link
+  estimatedAvailability DateTime // Estimated Availability Date
+  status               Boolean   // Toggle for Available (true) or Unavailable (false)
+  userId               String
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt            DateTime  @default(now())
+}
+
+model Equipment {
+  id String @id @default(cuid())
+  title String
+  slug String @unique
+  description String?
+  priceCents Int
+  currency String @default("INR")
+  images String[]
+  category String
+  condition EquipmentCondition
+  location String
+
+  sellerId String
+  seller User @relation(fields: [sellerId], references: [id])
+
+  inquiries EquipmentInquiry[]
+  certifications Certification[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EquipmentInquiry {
+  id String @id @default(cuid())
+  message String?
+
+  buyerId String
+  buyer User @relation("BuyerInquiries", fields: [buyerId], references: [id])
+
+  sellerId String
+  seller User @relation("SellerInquiries", fields: [sellerId], references: [id])
+
+  equipmentId String
+  equipment Equipment @relation(fields: [equipmentId], references: [id])
+
+  status InquiryStatus @default(NEW)
+  whatsappMessageSent Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([buyerId, equipmentId]) // Prevent duplicate inquiries
+}
+
+model Certification {
+  id String @id @default(cuid())
+
+  certificationNumber String
+  standard CertificationStandard
+  certifyingBody String
+  issueDate DateTime
+  expiryDate DateTime
+  documentUrl String?
+
+  equipmentId String
+  equipment Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  status CertificationStatus @default(PENDING)
+  adminNotes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
